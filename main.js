@@ -1,3 +1,5 @@
+import './style.css'
+
 const translations = {
     en: { app_title: "Weather App", search_placeholder: "Search for a city...", search_button: "Search", humidity: "Humidity:", wind: "Wind speed:", error_message: "City not found. Please try again.", loading_text: "Loading...", weather_in: "Weather in", forecast_title: "5-Day Forecast", geolocation_error: "Unable to retrieve your location.", favorites: "Favorites", no_favorites: "No favorite cities yet." },
     ar: { app_title: "تطبيق الطقس", search_placeholder: "ابحث عن مدينة...", search_button: "بحث", humidity: "الرطوبة:", wind: "سرعة الرياح:", error_message: "لم يتم العثور على المدينة. يرجى المحاولة مرة أخرى.", loading_text: "جارٍ التحميل...", weather_in: "الطقس في", forecast_title: "توقعات 5 أيام", geolocation_error: "تعذر الحصول على موقعك.", favorites: "المفضلة", no_favorites: "لا يوجد مدن مفضلة بعد." },
@@ -5,7 +7,8 @@ const translations = {
 };
 
 let weather = {
-    apiKey: API_KEY,
+    apiKey: import.meta.env.VITE_API_KEY,
+
     currentLang: 'ar',
     currentCity: null,
     favorites: [],
