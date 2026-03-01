@@ -153,6 +153,18 @@ body {
     flex-shrink: 0;
 }
 
+
+.search-button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible {
+    outline: 3px solid rgba(0, 123, 255, 0.35);
+    outline-offset: 2px;
+}
+
 .lang-btn.active,
 .search-button:hover,
 .favorites-btn:hover,

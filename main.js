@@ -1,5 +1,16 @@
 import './style.css'
 
+const STORAGE_KEYS = {
+  lang: 'weatherAppLang',
+  city: 'weatherAppCity',
+  theme: 'weatherAppTheme',
+  favorites: 'weatherAppFavorites',
+}
+
+const DEFAULT_CITY = 'Riyadh'
+const DEFAULT_LANG = 'ar'
+const DEFAULT_THEME = 'light'
+
 const translations = {
   en: {
     app_title: 'Weather App',
@@ -12,6 +23,7 @@ const translations = {
     error_rate_limit: 'Too many requests. Please try again in a minute.',
     error_network: 'Network issue. Please check your connection.',
     error_unknown: 'Something went wrong. Please try again.',
+    error_missing_api_key: 'API key is missing. Add VITE_API_KEY in your .env file.',
     loading_text: 'Loading...',
     weather_in: 'Weather in',
     forecast_title: '5-Day Forecast',
@@ -33,6 +45,7 @@ const translations = {
     error_rate_limit: 'تم تجاوز الحد المسموح من الطلبات. حاول بعد دقيقة.',
     error_network: 'مشكلة في الشبكة. يرجى التحقق من الاتصال.',
     error_unknown: 'حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.',
+    error_missing_api_key: 'مفتاح API مفقود. أضف VITE_API_KEY داخل ملف .env.',
     loading_text: 'جارٍ التحميل...',
     weather_in: 'الطقس في',
     forecast_title: 'توقعات 5 أيام',
@@ -54,6 +67,7 @@ const translations = {
     error_rate_limit: 'Слишком много запросов. Повторите через минуту.',
     error_network: 'Проблема с сетью. Проверьте подключение.',
     error_unknown: 'Произошла ошибка. Попробуйте снова.',
+    error_missing_api_key: 'API-ключ отсутствует. Добавьте VITE_API_KEY в .env.',
     loading_text: 'Загрузка...',
     weather_in: 'Погода в',
     forecast_title: 'Прогноз на 5 дней',
@@ -67,55 +81,72 @@ const translations = {
 }
 
 const getTranslation = (lang, key) => translations[lang]?.[key] || translations.en[key] || key
+const normalizeCity = (city) => city.trim().toLocaleLowerCase()
 
 const weather = {
   apiKey: import.meta.env.VITE_API_KEY,
-  currentLang: 'ar',
+  currentLang: DEFAULT_LANG,
   currentCity: null,
   favorites: [],
   currentWeatherData: null,
   currentForecastData: null,
+  requestController: null,
 
-  loadFavorites() {
-    const savedFavorites = localStorage.getItem('weatherAppFavorites')
-    if (!savedFavorites) {
-      this.updateFavoritesUI()
-      return
-    }
+  setLoading(isLoading) {
+    const weatherElement = document.querySelector('.weather')
+    const searchButton = document.querySelector('.search-button')
+
+    weatherElement.classList.toggle('loading', isLoading)
+    weatherElement.classList.toggle('loaded', !isLoading && !!this.currentWeatherData)
+    searchButton.disabled = isLoading
+    searchButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  },
+
+  readFavoritesSafely() {
+    const raw = localStorage.getItem(STORAGE_KEYS.favorites)
+    if (!raw) return []
 
     try {
-      const parsed = JSON.parse(savedFavorites)
-      this.favorites = Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+      const dedupMap = new Map()
+      parsed
+        .filter((item) => typeof item === 'string' && item.trim())
+        .forEach((city) => dedupMap.set(normalizeCity(city), city.trim()))
+      return [...dedupMap.values()]
     } catch {
-      this.favorites = []
-      localStorage.removeItem('weatherAppFavorites')
+      localStorage.removeItem(STORAGE_KEYS.favorites)
+      return []
     }
+  },
 
+  loadFavorites() {
+    this.favorites = this.readFavoritesSafely()
     this.updateFavoritesUI()
   },
 
   saveFavorites() {
-    localStorage.setItem('weatherAppFavorites', JSON.stringify(this.favorites))
+    localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(this.favorites))
     this.updateFavoritesUI()
   },
 
   isFavorite(city) {
-    return this.favorites.includes(city)
+    if (!city) return false
+    const key = normalizeCity(city)
+    return this.favorites.some((fav) => normalizeCity(fav) === key)
   },
 
   toggleFavorite() {
     if (!this.currentCity) return
 
-    const starIcon = document.querySelector('.favorite-toggle')
+    const normalized = normalizeCity(this.currentCity)
     if (this.isFavorite(this.currentCity)) {
-      this.favorites = this.favorites.filter((favCity) => favCity !== this.currentCity)
-      starIcon.classList.remove('is-favorite')
-      starIcon.setAttribute('aria-pressed', 'false')
+      this.favorites = this.favorites.filter((favCity) => normalizeCity(favCity) !== normalized)
     } else {
-      this.favorites.push(this.currentCity)
-      starIcon.classList.add('is-favorite')
-      starIcon.setAttribute('aria-pressed', 'true')
+      this.favorites = [...this.favorites, this.currentCity]
     }
+
+    this.updateStarIcon()
     this.saveFavorites()
   },
 
@@ -149,12 +180,12 @@ const weather = {
 
       cityButton.addEventListener('click', () => {
         this.fetchWeather(city)
-        dropdown.classList.remove('show')
+        toggleFavoritesDropdown(false)
       })
 
       deleteButton.addEventListener('click', (e) => {
         e.stopPropagation()
-        this.favorites = this.favorites.filter((favCity) => favCity !== city)
+        this.favorites = this.favorites.filter((favCity) => normalizeCity(favCity) !== normalizeCity(city))
         this.saveFavorites()
         this.updateStarIcon()
       })
@@ -165,13 +196,14 @@ const weather = {
   },
 
   updateStarIcon() {
-    const starIcon = document.querySelector('.favorite-toggle')
+    const starButton = document.querySelector('.favorite-toggle')
     const isFav = this.isFavorite(this.currentCity)
-    starIcon.classList.toggle('is-favorite', isFav)
-    starIcon.setAttribute('aria-pressed', isFav ? 'true' : 'false')
+    starButton.classList.toggle('is-favorite', isFav)
+    starButton.setAttribute('aria-pressed', isFav ? 'true' : 'false')
   },
 
   getErrorMessageKey(error) {
+    if (error?.name === 'AbortError') return null
     if (error?.name === 'TypeError') return 'error_network'
     if (error?.status === 401) return 'error_api_key'
     if (error?.status === 404) return 'error_city_not_found'
@@ -179,13 +211,10 @@ const weather = {
     return 'error_unknown'
   },
 
-  showError(error) {
-    const weatherElement = document.querySelector('.weather')
+  showErrorByKey(errorKey) {
+    if (!errorKey) return
     const errorElement = document.querySelector('.error-message')
     const errorText = errorElement.querySelector('p')
-
-    weatherElement.classList.remove('loading', 'loaded')
-    const errorKey = this.getErrorMessageKey(error)
     errorText.textContent = getTranslation(this.currentLang, errorKey)
     errorElement.style.display = 'block'
   },
@@ -194,57 +223,72 @@ const weather = {
     document.querySelector('.error-message').style.display = 'none'
   },
 
-  async fetchJson(url, fallbackMessage = 'Request failed') {
-    const response = await fetch(url)
+  async fetchJson(url, signal) {
+    const response = await fetch(url, { signal })
     if (!response.ok) {
-      const error = new Error(fallbackMessage)
+      const error = new Error('Request failed')
       error.status = response.status
       throw error
     }
     return response.json()
   },
 
+  ensureApiKey() {
+    if (this.apiKey) return true
+    this.showErrorByKey('error_missing_api_key')
+    this.setLoading(false)
+    return false
+  },
+
   async fetchWeather(location) {
-    let url
+    if (!this.ensureApiKey()) return
 
-    if (typeof location === 'string') {
-      this.currentCity = location
-      url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&units=metric&appid=${this.apiKey}&lang=${this.currentLang}`
-    } else {
-      url = `https://api.openweathermap.org/data/2.5/weather?lat=${location.lat}&lon=${location.lon}&units=metric&appid=${this.apiKey}&lang=${this.currentLang}`
+    if (this.requestController) {
+      this.requestController.abort()
     }
+    this.requestController = new AbortController()
+    const { signal } = this.requestController
 
-    const weatherElement = document.querySelector('.weather')
-    const forecastElement = document.querySelector('.forecast-container')
+    const isCityQuery = typeof location === 'string'
+    const cityValue = isCityQuery ? location.trim() : null
 
-    weatherElement.classList.add('loading')
-    weatherElement.classList.remove('loaded')
+    const weatherUrl = isCityQuery
+      ? `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityValue)}&units=metric&appid=${this.apiKey}&lang=${this.currentLang}`
+      : `https://api.openweathermap.org/data/2.5/weather?lat=${location.lat}&lon=${location.lon}&units=metric&appid=${this.apiKey}&lang=${this.currentLang}`
+
+    this.setLoading(true)
     this.hideError()
-    forecastElement.style.display = 'none'
-    forecastElement.classList.remove('animated')
+    document.querySelector('.forecast-container').style.display = 'none'
+    document.querySelector('.forecast-container').classList.remove('animated')
 
     try {
-      const data = await this.fetchJson(url, 'Failed to fetch weather')
+      const data = await this.fetchJson(weatherUrl, signal)
       this.currentWeatherData = data
       this.currentCity = data.name
-      localStorage.setItem('weatherAppCity', this.currentCity)
+      localStorage.setItem(STORAGE_KEYS.city, this.currentCity)
       this.displayWeather(data)
-      await this.fetchForecast(this.currentCity)
+      await this.fetchForecast(this.currentCity, signal)
     } catch (error) {
-      this.showError(error)
-      document.querySelector('.forecast-container').style.display = 'none'
+      const errorKey = this.getErrorMessageKey(error)
+      if (errorKey) {
+        this.setLoading(false)
+        this.showErrorByKey(errorKey)
+        document.querySelector('.forecast-container').style.display = 'none'
+      }
     }
   },
 
-  async fetchForecast(city) {
+  async fetchForecast(city, signal) {
     const url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&units=metric&appid=${this.apiKey}&lang=${this.currentLang}`
 
     try {
-      const data = await this.fetchJson(url, 'Failed to fetch forecast')
+      const data = await this.fetchJson(url, signal)
       this.currentForecastData = data
       this.displayForecast(data)
     } catch (error) {
-      console.error('Error fetching forecast:', error)
+      if (error?.name !== 'AbortError') {
+        console.error('Error fetching forecast:', error)
+      }
       document.querySelector('.forecast-container').style.display = 'none'
     }
   },
@@ -253,7 +297,7 @@ const weather = {
     const { name } = data
     const { icon, description } = data.weather[0]
     const { temp, humidity } = data.main
-    const { speed } = data.wind
+    const windSpeedKmh = Math.round((data.wind.speed || 0) * 3.6)
     const root = document.documentElement
 
     if (document.body.classList.contains('dark-mode')) {
@@ -278,40 +322,43 @@ const weather = {
       root.style.setProperty('--bg-gradient-2', '#4682B4')
     }
 
-    document.querySelector('.weather').classList.remove('loading')
-    document.querySelector('.weather').classList.add('loaded')
     document.querySelector('.city').textContent = `${getTranslation(this.currentLang, 'weather_in')} ${name}`
-    this.updateStarIcon()
     document.querySelector('.icon').src = `https://openweathermap.org/img/wn/${icon}.png`
     document.querySelector('.icon').alt = description
     document.querySelector('.description').textContent = description
     document.querySelector('.temp').textContent = `${Math.round(temp)}°C`
     document.querySelector('.humidity').textContent = `${humidity}%`
-    document.querySelector('.wind').textContent = `${speed} km/h`
+    document.querySelector('.wind').textContent = `${windSpeedKmh} km/h`
+
+    this.updateStarIcon()
+    this.setLoading(false)
   },
 
   displayForecast(data) {
     const forecastContainer = document.querySelector('.forecast-days')
     forecastContainer.innerHTML = ''
-    const dailyForecasts = {}
 
+    const dailyForecasts = new Map()
     data.list.forEach((item) => {
-      const date = new Date(item.dt * 1000).toLocaleDateString(this.currentLang, { weekday: 'long' })
-      if (!dailyForecasts[date]) {
-        dailyForecasts[date] = { temps: [], icons: {}, descriptions: {} }
+      const dayKey = item.dt_txt.split(' ')[0]
+      const dayLabel = new Date(item.dt * 1000).toLocaleDateString(this.currentLang, { weekday: 'long' })
+
+      if (!dailyForecasts.has(dayKey)) {
+        dailyForecasts.set(dayKey, { label: dayLabel, temps: [], icons: {}, descriptions: {} })
       }
 
-      dailyForecasts[date].temps.push(item.main.temp)
+      const dayData = dailyForecasts.get(dayKey)
+      dayData.temps.push(item.main.temp)
+
       const icon = item.weather[0].icon
       const desc = item.weather[0].description
-      dailyForecasts[date].icons[icon] = (dailyForecasts[date].icons[icon] || 0) + 1
-      dailyForecasts[date].descriptions[desc] = (dailyForecasts[date].descriptions[desc] || 0) + 1
+      dayData.icons[icon] = (dayData.icons[icon] || 0) + 1
+      dayData.descriptions[desc] = (dayData.descriptions[desc] || 0) + 1
     })
 
-    Object.keys(dailyForecasts)
+    Array.from(dailyForecasts.values())
       .slice(0, 5)
-      .forEach((day) => {
-        const dayData = dailyForecasts[day]
+      .forEach((dayData) => {
         const avgTemp = dayData.temps.reduce((a, b) => a + b, 0) / dayData.temps.length
         const mostCommonIcon = Object.keys(dayData.icons).reduce((a, b) =>
           dayData.icons[a] > dayData.icons[b] ? a : b,
@@ -325,7 +372,7 @@ const weather = {
 
         const dayDate = document.createElement('div')
         dayDate.classList.add('forecast-date')
-        dayDate.textContent = day
+        dayDate.textContent = dayData.label
 
         const dayIcon = document.createElement('img')
         dayIcon.src = `https://openweathermap.org/img/wn/${mostCommonIcon}.png`
@@ -366,19 +413,21 @@ const weather = {
   },
 
   getLocationWeather() {
+    if (!this.ensureApiKey()) return
+
     const success = (position) => {
       const { latitude, longitude } = position.coords
       this.fetchWeather({ lat: latitude, lon: longitude })
     }
 
     const error = () => {
-      const lastCity = localStorage.getItem('weatherAppCity') || 'Riyadh'
+      const lastCity = localStorage.getItem(STORAGE_KEYS.city) || DEFAULT_CITY
       this.fetchWeather(lastCity)
       console.warn(getTranslation(this.currentLang, 'geolocation_error'))
     }
 
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(success, error)
+      navigator.geolocation.getCurrentPosition(success, error, { timeout: 8000 })
     } else {
       error()
     }
@@ -391,6 +440,12 @@ const themeToggle = document.getElementById('theme-checkbox')
 const favoriteToggleButton = document.querySelector('.favorite-toggle')
 const favoritesBtn = document.querySelector('.favorites-btn')
 const favoritesDropdown = document.querySelector('.favorites-dropdown')
+
+function toggleFavoritesDropdown(force) {
+  const isExpanded = typeof force === 'boolean' ? force : !favoritesDropdown.classList.contains('show')
+  favoritesDropdown.classList.toggle('show', isExpanded)
+  favoritesBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false')
+}
 
 function setLanguage(lang) {
   weather.currentLang = lang
@@ -408,7 +463,7 @@ function setLanguage(lang) {
   htmlEl.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr')
   htmlEl.setAttribute('lang', lang)
   langButtons.forEach((btn) => btn.classList.toggle('active', btn.getAttribute('data-lang') === lang))
-  localStorage.setItem('weatherAppLang', lang)
+  localStorage.setItem(STORAGE_KEYS.lang, lang)
 
   themeToggle.setAttribute('aria-label', getTranslation(lang, 'toggle_theme'))
   favoriteToggleButton.setAttribute('aria-label', getTranslation(lang, 'favorite_city'))
@@ -435,34 +490,42 @@ function applyTheme(theme) {
 themeToggle.addEventListener('change', () => {
   const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark'
   applyTheme(newTheme)
-  localStorage.setItem('weatherAppTheme', newTheme)
+  localStorage.setItem(STORAGE_KEYS.theme, newTheme)
 })
 
 document.querySelector('.search-button').addEventListener('click', () => weather.search())
 document.querySelector('.search-bar').addEventListener('keyup', (event) => {
   if (event.key === 'Enter') weather.search()
 })
+
 langButtons.forEach((button) =>
   button.addEventListener('click', (event) => setLanguage(event.target.getAttribute('data-lang'))),
 )
 
 favoriteToggleButton.addEventListener('click', () => weather.toggleFavorite())
+
 favoritesBtn.addEventListener('click', () => {
-  const isExpanded = favoritesDropdown.classList.toggle('show')
-  favoritesBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false')
+  toggleFavoritesDropdown()
 })
 
-window.addEventListener('click', (e) => {
-  if (!favoritesBtn.contains(e.target) && !favoritesDropdown.contains(e.target)) {
-    favoritesDropdown.classList.remove('show')
-    favoritesBtn.setAttribute('aria-expanded', 'false')
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    toggleFavoritesDropdown(false)
+  }
+})
+
+window.addEventListener('click', (event) => {
+  if (!favoritesBtn.contains(event.target) && !favoritesDropdown.contains(event.target)) {
+    toggleFavoritesDropdown(false)
   }
 })
 
 document.addEventListener('DOMContentLoaded', () => {
   weather.loadFavorites()
-  const savedLang = localStorage.getItem('weatherAppLang') || 'ar'
-  const savedTheme = localStorage.getItem('weatherAppTheme') || 'light'
+
+  const savedLang = localStorage.getItem(STORAGE_KEYS.lang) || DEFAULT_LANG
+  const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) || DEFAULT_THEME
+
   setLanguage(savedLang)
   applyTheme(savedTheme)
   weather.getLocationWeather()

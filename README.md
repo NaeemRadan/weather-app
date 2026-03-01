@@ -1,15 +1,17 @@
 # Weather App
 
-Simple weather dashboard built with Vite and vanilla JavaScript.
+A production-minded weather dashboard built with Vite and vanilla JavaScript.
 
-## Features
+## Highlights
 
-- Current weather by city or browser geolocation.
-- 5-day forecast.
-- Arabic / English / Russian language support.
-- Favorites list saved in localStorage.
+- Current weather by city name or browser geolocation.
+- 5-day forecast rendering.
+- Arabic / English / Russian UI.
+- Favorites with validated and deduplicated localStorage persistence.
 - Light / dark theme.
-- Improved API error handling.
+- Improved error UX for API key, rate limit, network, and missing city.
+- Request cancellation (`AbortController`) to prevent stale API results.
+- Better accessibility (ARIA states, keyboard escape to close favorites, focus-visible styles).
 
 ## Setup
 
@@ -17,7 +19,7 @@ Simple weather dashboard built with Vite and vanilla JavaScript.
    ```bash
    npm ci
    ```
-2. Create `.env` file in project root:
+2. Create `.env` in project root:
    ```bash
    VITE_API_KEY=your_openweathermap_api_key
    ```
