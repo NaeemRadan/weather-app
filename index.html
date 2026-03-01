@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-translate="app_title">تطبيق الطقس</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
-<body>
 
+<body>
     <header class="top-bar">
         <div class="language-selector">
             <button class="lang-btn" data-lang="ar">العربية</button>
@@ -18,11 +21,19 @@
             <button class="lang-btn" data-lang="ru">Русский</button>
         </div>
 
-        <div class="favorites-container">
-            <button class="favorites-btn" type="button" aria-expanded="false" aria-controls="favorites-dropdown">
-                <i class="fas fa-star" aria-hidden="true"></i> <span data-translate="favorites">المفضلة</span>
+        <div class="actions-group">
+            <button class="locate-btn" type="button">
+                <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+                <span data-translate="use_my_location">موقعي</span>
             </button>
-            <div id="favorites-dropdown" class="favorites-dropdown"></div>
+
+            <div class="favorites-container">
+                <button class="favorites-btn" type="button" aria-expanded="false" aria-controls="favorites-dropdown">
+                    <i class="fas fa-star" aria-hidden="true"></i>
+                    <span data-translate="favorites">المفضلة</span>
+                </button>
+                <div id="favorites-dropdown" class="favorites-dropdown"></div>
+            </div>
         </div>
 
         <div class="theme-switch-container">
@@ -33,17 +44,22 @@
         </div>
     </header>
 
-    <div class="card">
-        <div class="search">
+    <main class="card" aria-live="polite">
+        <section class="status-row">
+            <div class="status-chip" id="location-status" data-translate="location_idle">جاهز لتحديد الموقع</div>
+            <div class="status-chip" id="updated-at">--:--</div>
+        </section>
+
+        <section class="search" aria-label="Search weather">
             <input type="text" class="search-bar" data-translate-placeholder="search_placeholder">
             <button class="search-button" type="button" data-translate="search_button">بحث</button>
-        </div>
+        </section>
 
-        <div class="weather">
+        <section class="weather">
             <div class="loader">
                 <p data-translate="loading_text">جارٍ التحميل...</p>
             </div>
-            
+
             <div class="city-header">
                 <h2 class="city"></h2>
                 <button class="favorite-toggle" type="button" aria-pressed="false">
@@ -52,25 +68,46 @@
             </div>
 
             <h1 class="temp"></h1>
+
             <div class="weather-info">
                 <img src="https://openweathermap.org/img/wn/04n.png" alt="" class="icon" />
-                <div class="description"></div>
+                <div>
+                    <div class="description"></div>
+                    <small class="feels-like"></small>
+                </div>
             </div>
-            <div class="humidity-label" data-translate="humidity">الرطوبة</div><span class="humidity"></span>
-            <div class="wind-label" data-translate="wind">سرعة الرياح</div><span class="wind"></span>
-        </div>
+
+            <div class="metrics-grid">
+                <article class="metric-card">
+                    <span data-translate="humidity">الرطوبة:</span>
+                    <strong class="humidity"></strong>
+                </article>
+                <article class="metric-card">
+                    <span data-translate="wind">سرعة الرياح:</span>
+                    <strong class="wind"></strong>
+                </article>
+                <article class="metric-card">
+                    <span data-translate="pressure">الضغط:</span>
+                    <strong class="pressure"></strong>
+                </article>
+                <article class="metric-card">
+                    <span data-translate="visibility">مدى الرؤية:</span>
+                    <strong class="visibility"></strong>
+                </article>
+            </div>
+        </section>
 
         <div class="error-message" style="display: none;" role="alert" aria-live="assertive">
             <p data-translate="error_city_not_found">لم يتم العثور على المدينة. يرجى المحاولة مرة أخرى.</p>
         </div>
 
-        <div class="forecast-container">
+        <section class="forecast-container">
             <h3 class="forecast-title" data-translate="forecast_title">توقعات 5 أيام</h3>
             <div class="forecast-days"></div>
-        </div>
-    </div>
+        </section>
+    </main>
 
-   <script type="module" src="/main.js"></script>
-
+    <script type="module" src="/main.js"></script>
 </body>
+
 </html>

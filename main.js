@@ -16,8 +16,12 @@ const translations = {
     app_title: 'Weather App',
     search_placeholder: 'Search for a city...',
     search_button: 'Search',
+    use_my_location: 'My location',
     humidity: 'Humidity:',
     wind: 'Wind speed:',
+    pressure: 'Pressure:',
+    visibility: 'Visibility:',
+    feels_like: 'Feels like',
     error_city_not_found: 'City not found. Please try again.',
     error_api_key: 'API key is invalid or missing.',
     error_rate_limit: 'Too many requests. Please try again in a minute.',
@@ -33,13 +37,22 @@ const translations = {
     toggle_theme: 'Toggle theme',
     favorite_city: 'Toggle city as favorite',
     remove_favorite: 'Remove from favorites',
+    location_idle: 'Ready to detect location',
+    location_detecting: 'Detecting your location…',
+    location_success: 'Location detected automatically',
+    location_denied: 'Location denied, fallback city used',
+    updated_at: 'Updated at',
   },
   ar: {
     app_title: 'تطبيق الطقس',
     search_placeholder: 'ابحث عن مدينة...',
     search_button: 'بحث',
+    use_my_location: 'موقعي',
     humidity: 'الرطوبة:',
     wind: 'سرعة الرياح:',
+    pressure: 'الضغط:',
+    visibility: 'مدى الرؤية:',
+    feels_like: 'المحسوسة',
     error_city_not_found: 'لم يتم العثور على المدينة. يرجى المحاولة مرة أخرى.',
     error_api_key: 'مفتاح API غير صالح أو مفقود.',
     error_rate_limit: 'تم تجاوز الحد المسموح من الطلبات. حاول بعد دقيقة.',
@@ -55,13 +68,22 @@ const translations = {
     toggle_theme: 'تبديل السمة',
     favorite_city: 'تبديل المدينة كمفضلة',
     remove_favorite: 'إزالة من المفضلة',
+    location_idle: 'جاهز لتحديد الموقع',
+    location_detecting: 'جارٍ تحديد موقعك…',
+    location_success: 'تم تحديد الموقع تلقائياً',
+    location_denied: 'تم رفض الموقع، تم استخدام مدينة بديلة',
+    updated_at: 'آخر تحديث',
   },
   ru: {
     app_title: 'Погодное приложение',
     search_placeholder: 'Поиск города...',
     search_button: 'Поиск',
+    use_my_location: 'Моё местоположение',
     humidity: 'Влажность:',
     wind: 'Скорость ветра:',
+    pressure: 'Давление:',
+    visibility: 'Видимость:',
+    feels_like: 'Ощущается как',
     error_city_not_found: 'Город не найден. Пожалуйста, попробуйте еще раз.',
     error_api_key: 'API-ключ отсутствует или недействителен.',
     error_rate_limit: 'Слишком много запросов. Повторите через минуту.',
@@ -77,7 +99,40 @@ const translations = {
     toggle_theme: 'Переключить тему',
     favorite_city: 'Добавить/убрать город из избранного',
     remove_favorite: 'Удалить из избранного',
+    location_idle: 'Готово к определению геолокации',
+    location_detecting: 'Определяем ваше местоположение…',
+    location_success: 'Местоположение определено автоматически',
+    location_denied: 'Геолокация отклонена, используется резервный город',
+    updated_at: 'Обновлено в',
   },
+}
+
+const refs = {
+  html: document.documentElement,
+  weather: document.querySelector('.weather'),
+  searchBar: document.querySelector('.search-bar'),
+  searchButton: document.querySelector('.search-button'),
+  themeToggle: document.getElementById('theme-checkbox'),
+  favoriteToggleButton: document.querySelector('.favorite-toggle'),
+  favoritesBtn: document.querySelector('.favorites-btn'),
+  favoritesDropdown: document.querySelector('.favorites-dropdown'),
+  locateButton: document.querySelector('.locate-btn'),
+  locationStatus: document.getElementById('location-status'),
+  updatedAt: document.getElementById('updated-at'),
+  errorBox: document.querySelector('.error-message'),
+  errorText: document.querySelector('.error-message p'),
+  forecastContainer: document.querySelector('.forecast-container'),
+  forecastDays: document.querySelector('.forecast-days'),
+  langButtons: document.querySelectorAll('.lang-btn'),
+  city: document.querySelector('.city'),
+  icon: document.querySelector('.icon'),
+  description: document.querySelector('.description'),
+  feelsLike: document.querySelector('.feels-like'),
+  temp: document.querySelector('.temp'),
+  humidity: document.querySelector('.humidity'),
+  wind: document.querySelector('.wind'),
+  pressure: document.querySelector('.pressure'),
+  visibility: document.querySelector('.visibility'),
 }
 
 const getTranslation = (lang, key) => translations[lang]?.[key] || translations.en[key] || key
@@ -93,13 +148,22 @@ const weather = {
   requestController: null,
 
   setLoading(isLoading) {
-    const weatherElement = document.querySelector('.weather')
-    const searchButton = document.querySelector('.search-button')
+    refs.weather.classList.toggle('loading', isLoading)
+    refs.weather.classList.toggle('loaded', !isLoading && !!this.currentWeatherData)
+    refs.searchButton.disabled = isLoading
+    refs.searchButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  },
 
-    weatherElement.classList.toggle('loading', isLoading)
-    weatherElement.classList.toggle('loaded', !isLoading && !!this.currentWeatherData)
-    searchButton.disabled = isLoading
-    searchButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  setLocationStatus(key) {
+    refs.locationStatus.textContent = getTranslation(this.currentLang, key)
+  },
+
+  setUpdatedAt() {
+    const now = new Date().toLocaleTimeString(this.currentLang, {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    refs.updatedAt.textContent = `${getTranslation(this.currentLang, 'updated_at')}: ${now}`
   },
 
   readFavoritesSafely() {
@@ -151,21 +215,19 @@ const weather = {
   },
 
   updateFavoritesUI() {
-    const dropdown = document.querySelector('.favorites-dropdown')
-    dropdown.innerHTML = ''
+    refs.favoritesDropdown.innerHTML = ''
 
     if (this.favorites.length === 0) {
       const item = document.createElement('div')
       item.classList.add('favorite-item')
       item.textContent = getTranslation(this.currentLang, 'no_favorites')
-      dropdown.appendChild(item)
+      refs.favoritesDropdown.appendChild(item)
       return
     }
 
     this.favorites.forEach((city) => {
       const item = document.createElement('div')
       item.classList.add('favorite-item')
-      item.dataset.city = city
 
       const cityButton = document.createElement('button')
       cityButton.type = 'button'
@@ -183,23 +245,22 @@ const weather = {
         toggleFavoritesDropdown(false)
       })
 
-      deleteButton.addEventListener('click', (e) => {
-        e.stopPropagation()
+      deleteButton.addEventListener('click', (event) => {
+        event.stopPropagation()
         this.favorites = this.favorites.filter((favCity) => normalizeCity(favCity) !== normalizeCity(city))
         this.saveFavorites()
         this.updateStarIcon()
       })
 
       item.append(cityButton, deleteButton)
-      dropdown.appendChild(item)
+      refs.favoritesDropdown.appendChild(item)
     })
   },
 
   updateStarIcon() {
-    const starButton = document.querySelector('.favorite-toggle')
     const isFav = this.isFavorite(this.currentCity)
-    starButton.classList.toggle('is-favorite', isFav)
-    starButton.setAttribute('aria-pressed', isFav ? 'true' : 'false')
+    refs.favoriteToggleButton.classList.toggle('is-favorite', isFav)
+    refs.favoriteToggleButton.setAttribute('aria-pressed', isFav ? 'true' : 'false')
   },
 
   getErrorMessageKey(error) {
@@ -213,14 +274,12 @@ const weather = {
 
   showErrorByKey(errorKey) {
     if (!errorKey) return
-    const errorElement = document.querySelector('.error-message')
-    const errorText = errorElement.querySelector('p')
-    errorText.textContent = getTranslation(this.currentLang, errorKey)
-    errorElement.style.display = 'block'
+    refs.errorText.textContent = getTranslation(this.currentLang, errorKey)
+    refs.errorBox.style.display = 'block'
   },
 
   hideError() {
-    document.querySelector('.error-message').style.display = 'none'
+    refs.errorBox.style.display = 'none'
   },
 
   async fetchJson(url, signal) {
@@ -246,9 +305,9 @@ const weather = {
     if (this.requestController) {
       this.requestController.abort()
     }
+
     this.requestController = new AbortController()
     const { signal } = this.requestController
-
     const isCityQuery = typeof location === 'string'
     const cityValue = isCityQuery ? location.trim() : null
 
@@ -258,8 +317,8 @@ const weather = {
 
     this.setLoading(true)
     this.hideError()
-    document.querySelector('.forecast-container').style.display = 'none'
-    document.querySelector('.forecast-container').classList.remove('animated')
+    refs.forecastContainer.style.display = 'none'
+    refs.forecastContainer.classList.remove('animated')
 
     try {
       const data = await this.fetchJson(weatherUrl, signal)
@@ -268,12 +327,13 @@ const weather = {
       localStorage.setItem(STORAGE_KEYS.city, this.currentCity)
       this.displayWeather(data)
       await this.fetchForecast(this.currentCity, signal)
+      this.setUpdatedAt()
     } catch (error) {
       const errorKey = this.getErrorMessageKey(error)
       if (errorKey) {
         this.setLoading(false)
         this.showErrorByKey(errorKey)
-        document.querySelector('.forecast-container').style.display = 'none'
+        refs.forecastContainer.style.display = 'none'
       }
     }
   },
@@ -289,59 +349,69 @@ const weather = {
       if (error?.name !== 'AbortError') {
         console.error('Error fetching forecast:', error)
       }
-      document.querySelector('.forecast-container').style.display = 'none'
+      refs.forecastContainer.style.display = 'none'
     }
   },
 
   displayWeather(data) {
     const { name } = data
     const { icon, description } = data.weather[0]
-    const { temp, humidity } = data.main
+    const { temp, humidity, pressure, feels_like: feelsLike } = data.main
+    const visibilityKm = ((data.visibility || 0) / 1000).toFixed(1)
     const windSpeedKmh = Math.round((data.wind.speed || 0) * 3.6)
-    const root = document.documentElement
 
-    if (document.body.classList.contains('dark-mode')) {
-      if (temp > 28) {
-        root.style.setProperty('--bg-gradient-1', '#4a0e0e')
-        root.style.setProperty('--bg-gradient-2', '#781d1d')
-      } else if (temp < 15) {
-        root.style.setProperty('--bg-gradient-1', '#0d1b2a')
-        root.style.setProperty('--bg-gradient-2', '#1b263b')
-      } else {
-        root.style.setProperty('--bg-gradient-1', '#1b4965')
-        root.style.setProperty('--bg-gradient-2', '#4a6fa5')
-      }
-    } else if (temp > 28) {
-      root.style.setProperty('--bg-gradient-1', '#ffaf7b')
-      root.style.setProperty('--bg-gradient-2', '#ff8a5c')
-    } else if (temp < 15) {
-      root.style.setProperty('--bg-gradient-1', '#a2d2ff')
-      root.style.setProperty('--bg-gradient-2', '#bde0fe')
-    } else {
-      root.style.setProperty('--bg-gradient-1', '#87CEEB')
-      root.style.setProperty('--bg-gradient-2', '#4682B4')
-    }
+    refs.city.textContent = `${getTranslation(this.currentLang, 'weather_in')} ${name}`
+    refs.icon.src = `https://openweathermap.org/img/wn/${icon}.png`
+    refs.icon.alt = description
+    refs.description.textContent = description
+    refs.feelsLike.textContent = `${getTranslation(this.currentLang, 'feels_like')}: ${Math.round(feelsLike)}°C`
+    refs.temp.textContent = `${Math.round(temp)}°C`
+    refs.humidity.textContent = `${humidity}%`
+    refs.wind.textContent = `${windSpeedKmh} km/h`
+    refs.pressure.textContent = `${pressure} hPa`
+    refs.visibility.textContent = `${visibilityKm} km`
 
-    document.querySelector('.city').textContent = `${getTranslation(this.currentLang, 'weather_in')} ${name}`
-    document.querySelector('.icon').src = `https://openweathermap.org/img/wn/${icon}.png`
-    document.querySelector('.icon').alt = description
-    document.querySelector('.description').textContent = description
-    document.querySelector('.temp').textContent = `${Math.round(temp)}°C`
-    document.querySelector('.humidity').textContent = `${humidity}%`
-    document.querySelector('.wind').textContent = `${windSpeedKmh} km/h`
-
+    this.applyDynamicBackground(temp)
     this.updateStarIcon()
     this.setLoading(false)
   },
 
+  applyDynamicBackground(temp) {
+    const root = refs.html
+
+    if (document.body.classList.contains('dark-mode')) {
+      if (temp > 28) {
+        root.style.setProperty('--bg-gradient-1', '#432534')
+        root.style.setProperty('--bg-gradient-2', '#742f4f')
+      } else if (temp < 15) {
+        root.style.setProperty('--bg-gradient-1', '#0a2647')
+        root.style.setProperty('--bg-gradient-2', '#144272')
+      } else {
+        root.style.setProperty('--bg-gradient-1', '#1f4e5f')
+        root.style.setProperty('--bg-gradient-2', '#355c7d')
+      }
+      return
+    }
+
+    if (temp > 28) {
+      root.style.setProperty('--bg-gradient-1', '#f6a26b')
+      root.style.setProperty('--bg-gradient-2', '#e76f51')
+    } else if (temp < 15) {
+      root.style.setProperty('--bg-gradient-1', '#9dd9f3')
+      root.style.setProperty('--bg-gradient-2', '#70a1d7')
+    } else {
+      root.style.setProperty('--bg-gradient-1', '#80c8ff')
+      root.style.setProperty('--bg-gradient-2', '#4f8fba')
+    }
+  },
+
   displayForecast(data) {
-    const forecastContainer = document.querySelector('.forecast-days')
-    forecastContainer.innerHTML = ''
+    refs.forecastDays.innerHTML = ''
 
     const dailyForecasts = new Map()
     data.list.forEach((item) => {
       const dayKey = item.dt_txt.split(' ')[0]
-      const dayLabel = new Date(item.dt * 1000).toLocaleDateString(this.currentLang, { weekday: 'long' })
+      const dayLabel = new Date(item.dt * 1000).toLocaleDateString(this.currentLang, { weekday: 'short' })
 
       if (!dailyForecasts.has(dayKey)) {
         dailyForecasts.set(dayKey, { label: dayLabel, temps: [], icons: {}, descriptions: {} })
@@ -367,84 +437,65 @@ const weather = {
           dayData.descriptions[a] > dayData.descriptions[b] ? a : b,
         )
 
-        const dayElement = document.createElement('div')
+        const dayElement = document.createElement('article')
         dayElement.classList.add('forecast-day')
+        dayElement.innerHTML = `
+          <div class="forecast-date">${dayData.label}</div>
+          <img src="https://openweathermap.org/img/wn/${mostCommonIcon}.png" alt="${mostCommonDesc}" class="forecast-icon" />
+          <div class="forecast-temp">${Math.round(avgTemp)}°C</div>
+          <div class="forecast-description">${mostCommonDesc}</div>
+        `
 
-        const dayDate = document.createElement('div')
-        dayDate.classList.add('forecast-date')
-        dayDate.textContent = dayData.label
-
-        const dayIcon = document.createElement('img')
-        dayIcon.src = `https://openweathermap.org/img/wn/${mostCommonIcon}.png`
-        dayIcon.alt = mostCommonDesc
-        dayIcon.classList.add('forecast-icon')
-
-        const dayTemp = document.createElement('div')
-        dayTemp.classList.add('forecast-temp')
-        dayTemp.textContent = `${Math.round(avgTemp)}°C`
-
-        const dayDesc = document.createElement('div')
-        dayDesc.classList.add('forecast-description')
-        dayDesc.textContent = mostCommonDesc
-
-        dayElement.append(dayDate, dayIcon, dayTemp, dayDesc)
-        forecastContainer.appendChild(dayElement)
+        refs.forecastDays.appendChild(dayElement)
       })
 
-    const forecastElement = document.querySelector('.forecast-container')
-    forecastElement.style.display = 'block'
-    forecastElement.classList.add('animated')
+    refs.forecastContainer.style.display = 'block'
+    refs.forecastContainer.classList.add('animated')
   },
 
   search() {
-    const searchBar = document.querySelector('.search-bar')
-    const city = searchBar.value.trim()
+    const city = refs.searchBar.value.trim()
 
-    if (city) {
-      this.fetchWeather(city)
-      searchBar.value = ''
+    if (!city) {
+      refs.searchBar.classList.add('shake')
+      setTimeout(() => refs.searchBar.classList.remove('shake'), 500)
       return
     }
 
-    searchBar.classList.add('shake')
-    setTimeout(() => {
-      searchBar.classList.remove('shake')
-    }, 500)
+    this.fetchWeather(city)
+    refs.searchBar.value = ''
   },
 
-  getLocationWeather() {
+  detectLocationWeather() {
     if (!this.ensureApiKey()) return
 
-    const success = (position) => {
+    this.setLocationStatus('location_detecting')
+
+    const onSuccess = (position) => {
       const { latitude, longitude } = position.coords
       this.fetchWeather({ lat: latitude, lon: longitude })
+      this.setLocationStatus('location_success')
     }
 
-    const error = () => {
+    const onError = () => {
       const lastCity = localStorage.getItem(STORAGE_KEYS.city) || DEFAULT_CITY
       this.fetchWeather(lastCity)
+      this.setLocationStatus('location_denied')
       console.warn(getTranslation(this.currentLang, 'geolocation_error'))
     }
 
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(success, error, { timeout: 8000 })
+      navigator.geolocation.getCurrentPosition(onSuccess, onError, { timeout: 8000 })
     } else {
-      error()
+      onError()
     }
   },
 }
 
-const langButtons = document.querySelectorAll('.lang-btn')
-const htmlEl = document.querySelector('html')
-const themeToggle = document.getElementById('theme-checkbox')
-const favoriteToggleButton = document.querySelector('.favorite-toggle')
-const favoritesBtn = document.querySelector('.favorites-btn')
-const favoritesDropdown = document.querySelector('.favorites-dropdown')
-
 function toggleFavoritesDropdown(force) {
-  const isExpanded = typeof force === 'boolean' ? force : !favoritesDropdown.classList.contains('show')
-  favoritesDropdown.classList.toggle('show', isExpanded)
-  favoritesBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false')
+  const isExpanded = typeof force === 'boolean' ? force : !refs.favoritesDropdown.classList.contains('show')
+  refs.favoritesDropdown.classList.toggle('show', isExpanded)
+  refs.favoritesBtn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false')
 }
 
 function setLanguage(lang) {
@@ -460,62 +511,56 @@ function setLanguage(lang) {
     el.placeholder = getTranslation(lang, key)
   })
 
-  htmlEl.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr')
-  htmlEl.setAttribute('lang', lang)
-  langButtons.forEach((btn) => btn.classList.toggle('active', btn.getAttribute('data-lang') === lang))
+  refs.html.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr')
+  refs.html.setAttribute('lang', lang)
+  refs.langButtons.forEach((btn) => btn.classList.toggle('active', btn.getAttribute('data-lang') === lang))
   localStorage.setItem(STORAGE_KEYS.lang, lang)
 
-  themeToggle.setAttribute('aria-label', getTranslation(lang, 'toggle_theme'))
-  favoriteToggleButton.setAttribute('aria-label', getTranslation(lang, 'favorite_city'))
+  refs.themeToggle.setAttribute('aria-label', getTranslation(lang, 'toggle_theme'))
+  refs.favoriteToggleButton.setAttribute('aria-label', getTranslation(lang, 'favorite_city'))
 
-  if (weather.currentWeatherData) {
-    weather.displayWeather(weather.currentWeatherData)
-  }
-  if (weather.currentForecastData) {
-    weather.displayForecast(weather.currentForecastData)
-  }
+  if (weather.currentWeatherData) weather.displayWeather(weather.currentWeatherData)
+  if (weather.currentForecastData) weather.displayForecast(weather.currentForecastData)
 
   weather.updateFavoritesUI()
+  weather.setLocationStatus('location_idle')
+  weather.setUpdatedAt()
 }
 
 function applyTheme(theme) {
   document.body.classList.toggle('dark-mode', theme === 'dark')
-  themeToggle.checked = theme === 'dark'
+  refs.themeToggle.checked = theme === 'dark'
 
   if (weather.currentWeatherData) {
     weather.displayWeather(weather.currentWeatherData)
   }
 }
 
-themeToggle.addEventListener('change', () => {
+refs.themeToggle.addEventListener('change', () => {
   const newTheme = document.body.classList.contains('dark-mode') ? 'light' : 'dark'
   applyTheme(newTheme)
   localStorage.setItem(STORAGE_KEYS.theme, newTheme)
 })
 
-document.querySelector('.search-button').addEventListener('click', () => weather.search())
-document.querySelector('.search-bar').addEventListener('keyup', (event) => {
+refs.searchButton.addEventListener('click', () => weather.search())
+refs.searchBar.addEventListener('keyup', (event) => {
   if (event.key === 'Enter') weather.search()
 })
 
-langButtons.forEach((button) =>
+refs.langButtons.forEach((button) =>
   button.addEventListener('click', (event) => setLanguage(event.target.getAttribute('data-lang'))),
 )
 
-favoriteToggleButton.addEventListener('click', () => weather.toggleFavorite())
-
-favoritesBtn.addEventListener('click', () => {
-  toggleFavoritesDropdown()
-})
+refs.favoriteToggleButton.addEventListener('click', () => weather.toggleFavorite())
+refs.favoritesBtn.addEventListener('click', () => toggleFavoritesDropdown())
+refs.locateButton.addEventListener('click', () => weather.detectLocationWeather())
 
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    toggleFavoritesDropdown(false)
-  }
+  if (event.key === 'Escape') toggleFavoritesDropdown(false)
 })
 
 window.addEventListener('click', (event) => {
-  if (!favoritesBtn.contains(event.target) && !favoritesDropdown.contains(event.target)) {
+  if (!refs.favoritesBtn.contains(event.target) && !refs.favoritesDropdown.contains(event.target)) {
     toggleFavoritesDropdown(false)
   }
 })
@@ -528,5 +573,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setLanguage(savedLang)
   applyTheme(savedTheme)
-  weather.getLocationWeather()
+  weather.detectLocationWeather()
 })
